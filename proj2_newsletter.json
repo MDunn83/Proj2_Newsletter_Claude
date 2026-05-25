@@ -251,15 +251,267 @@
       "position": [2440, 220],
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const raw = ($json.text || '').toString().trim();\nconst src = $('Dedup').item.json;\nconst companyName = (src.companyName || '').toString();\nconst anchor = (src.anchor || '').toString();\nconst sector = (src.sector || '').toString();\nconst title = (src.title || '').toString();\nconst url = (src.url || '').toString();\nconst pubDate = (src.pubDate || '').toString();\nconst description = (src.description || '').toString();\nconst allowed = ['Product Launch','Partnership','Funding','Leadership Change','Research Publication','Hiring Signal','Regulatory/Legal','Other'];\nfunction parseFundingToMillions(str) {\n  if (!str) return null;\n  let s = str.toString().toUpperCase().split(',').join('').split('$').join('').trim();\n  let mult = 1;\n  if (s.indexOf('B') !== -1) mult = 1000;\n  else if (s.indexOf('M') !== -1) mult = 1;\n  else if (s.indexOf('K') !== -1) mult = 0.001;\n  const num = parseFloat(s);\n  if (isNaN(num)) return null;\n  return num * mult;\n}\nfunction grab(text, key) {\n  const marker = '\"' + key + '\"';\n  let i = text.indexOf(marker);\n  if (i === -1) return '';\n  i = text.indexOf(':', i);\n  if (i === -1) return '';\n  const q1 = text.indexOf('\"', i);\n  if (q1 === -1) return '';\n  const q2 = text.indexOf('\"', q1 + 1);\n  if (q2 === -1) return '';\n  return text.substring(q1 + 1, q2);\n}\nlet category = 'Other';\nlet funding = 'N/A';\nlet summary = '';\ntry {\n  const cleaned = raw.split('```json').join('').split('```').join('').trim();\n  const parsed = JSON.parse(cleaned);\n  category = (parsed.category || 'Other').toString().trim();\n  funding = (parsed.funding || 'N/A').toString().trim();\n  summary = (parsed.summary || '').toString().trim();\n} catch (e) {\n  const c = grab(raw, 'category');\n  const f = grab(raw, 'funding');\n  const s = grab(raw, 'summary');\n  if (c) category = c.trim();\n  if (f) funding = f.trim();\n  if (s) summary = s.trim();\n}\nif (allowed.indexOf(category) === -1) category = 'Other';\nconst fundingMillions = parseFundingToMillions(funding);\nconst isMonetary = (category === 'Funding' || category === 'Partnership');\nlet include = false;\nif (category !== 'Other') {\n  if (isMonetary) { include = (fundingMillions !== null && fundingMillions >= 100); }\n  else { include = true; }\n}\nlet reason = 'Included';\nif (category === 'Other') reason = 'Excluded: category Other';\nelse if (isMonetary && !(fundingMillions !== null && fundingMillions >= 100)) reason = 'Excluded: below $100M threshold';\nreturn { json: { companyName, anchor, sector, title, url, pubDate, description, category, funding, fundingMillions, summary, include, reason } };"
+        "jsCode": "const raw = ($json.text || '').toString().trim();\nconst src = $('Dedup').item.json;\nconst companyName = (src.companyName || '').toString();\nconst anchor = (src.anchor || '').toString();\nconst sector = (src.sector || '').toString();\nconst title = (src.title || '').toString();\nconst url = (src.url || '').toString();\nconst pubDate = (src.pubDate || '').toString();\nconst description = (src.description || '').toString();\nconst allowed = ['Product Launch','Partnership','Funding','Leadership Change','Research Publication','Hiring Signal','Regulatory/Legal','Other'];\nfunction parseFundingToMillions(str) {\n  if (!str) return null;\n  let s = str.toString().toUpperCase().split(',').join('').split('$').join('').trim();\n  let mult = 1;\n  if (s.indexOf('B') !== -1) mult = 1000;\n  else if (s.indexOf('M') !== -1) mult = 1;\n  else if (s.indexOf('K') !== -1) mult = 0.001;\n  const num = parseFloat(s);\n  if (isNaN(num)) return null;\n  return num * mult;\n}\nfunction grab(text, key) {\n  const marker = '\"' + key + '\"';\n  let i = text.indexOf(marker);\n  if (i === -1) return '';\n  i = text.indexOf(':', i);\n  if (i === -1) return '';\n  const q1 = text.indexOf('\"', i);\n  if (q1 === -1) return '';\n  const q2 = text.indexOf('\"', q1 + 1);\n  if (q2 === -1) return '';\n  return text.substring(q1 + 1, q2);\n}\nlet category = 'Other';\nlet funding = 'N/A';\nlet summary = '';\ntry {\n  const cleaned = raw.split('```json').join('').split('```').join('').trim();\n  const parsed = JSON.parse(cleaned);\n  category = (parsed.category || 'Other').toString().trim();\n  funding = (parsed.funding || 'N/A').toString().trim();\n  summary = (parsed.summary || '').toString().trim();\n} catch (e) {\n  const c = grab(raw, 'category');\n  const f = grab(raw, 'funding');\n  const s = grab(raw, 'summary');\n  if (c) category = c.trim();\n  if (f) funding = f.trim();\n  if (s) summary = s.trim();\n}\nif (allowed.indexOf(category) === -1) category = 'Other';\nconst fundingMillions = parseFundingToMillions(funding);\nconst isMonetary = (category === 'Funding');\nlet include = false;\nif (category !== 'Other') {\n  if (isMonetary) { include = (fundingMillions !== null && fundingMillions >= 100); }\n  else { include = true; }\n}\nlet reason = 'Included';\nif (category === 'Other') reason = 'Excluded: category Other';\nelse if (isMonetary && !(fundingMillions !== null && fundingMillions >= 100)) reason = 'Excluded: below $100M threshold';\nreturn { json: { companyName, anchor, sector, title, url, pubDate, description, category, funding, fundingMillions, summary, include, reason } };"
+      }
+    },
+    {
+      "id": "config",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-220, 320],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a_recipient",
+              "name": "recipientEmail",
+              "type": "string",
+              "value": "YOUR_RECIPIENT_EMAIL"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "if_include",
+      "name": "IF Include",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2660, 220],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cond_include",
+              "leftValue": "={{ $json.include }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "log_included",
+      "name": "Log Included",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [2880, 120],
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_GOOGLE_SHEET_ID"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "GID_OF_LOG_TAB",
+          "cachedResultName": "Log"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Company Name": "={{ $json.companyName }}",
+            "Signal Title": "={{ $json.title }}",
+            "Signal URL": "={{ $json.url }}",
+            "Signal Type": "={{ $json.category }}",
+            "Summary": "={{ $json.summary }}",
+            "PubDate": "={{ $json.pubDate }}",
+            "Logged": "={{ $now.toISO() }}",
+            "Briefing Included": "Yes",
+            "Funding": "={{ $json.funding }}"
+          },
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_GOOGLE_SHEETS_CRED",
+          "name": "Google Sheets OAuth2 API"
+        }
+      }
+    },
+    {
+      "id": "log_excluded",
+      "name": "Log Excluded",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [2880, 320],
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_GOOGLE_SHEET_ID"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "GID_OF_LOG_TAB",
+          "cachedResultName": "Log"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Company Name": "={{ $json.companyName }}",
+            "Signal Title": "={{ $json.title }}",
+            "Signal URL": "={{ $json.url }}",
+            "Signal Type": "={{ $json.category }}",
+            "Summary": "={{ $json.summary }}",
+            "PubDate": "={{ $json.pubDate }}",
+            "Logged": "={{ $now.toISO() }}",
+            "Briefing Included": "No",
+            "Funding": "={{ $json.funding }}"
+          },
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_GOOGLE_SHEETS_CRED",
+          "name": "Google Sheets OAuth2 API"
+        }
+      }
+    },
+    {
+      "id": "aggregate_included",
+      "name": "Aggregate Included",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2660, 480],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const NL = String.fromCharCode(10);\nconst items = $input.all();\nconst included = [];\nfor (const it of items) {\n  const j = it.json || {};\n  if (j.include === true) included.push(j);\n}\nlet combined = '';\nfor (let i = 0; i < included.length; i++) {\n  const a = included[i];\n  combined += (i + 1) + '. Company: ' + (a.companyName || '') + NL;\n  combined += 'Category: ' + (a.category || '') + NL;\n  if (a.funding && a.funding !== 'N/A') combined += 'Funding/Value: ' + a.funding + NL;\n  combined += 'Headline: ' + (a.title || '') + NL;\n  combined += 'Summary: ' + (a.summary || '') + NL;\n  combined += 'Source: ' + (a.url || '') + NL + NL;\n}\nconst count = included.length;\nconst hasSignals = count > 0;\nreturn [{ json: { count, hasSignals, combined } }];"
+      }
+    },
+    {
+      "id": "if_has_signals",
+      "name": "IF Has Signals",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2880, 480],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cond_has_signals",
+              "leftValue": "={{ $json.hasSignals }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "synthesize",
+      "name": "Synthesize",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.4,
+      "position": [3100, 400],
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are writing a concise daily AI industry newsletter.\n\nSynthesize the following company news signals into a cohesive briefing of NO MORE THAN 5 short paragraphs. Group related developments by theme and lead with the most significant. Do not simply list each item; weave them into flowing prose. Do not invent facts beyond what is provided. Do not use bullet points or headings.\n\nSignals:\n{{ $json.combined }}\n\nOutput ONLY the newsletter body. Begin directly with the first paragraph. Do not include a subject line, greeting, preamble, or closing remarks."
+      }
+    },
+    {
+      "id": "sanitize_text",
+      "name": "Sanitize Text",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3320, 400],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const NL = String.fromCharCode(10);\nconst BS = String.fromCharCode(92);\nconst PARA = String.fromCharCode(1);\nlet text = ($json.text || '').toString();\ntext = text.split(BS + 'n').join(NL);\ntext = text.split(NL + NL).join(PARA);\ntext = text.split(NL).join(' ');\ntext = text.split(PARA).join(NL + NL);\nwhile (text.indexOf('  ') !== -1) { text = text.split('  ').join(' '); }\ntext = text.trim();\nconst html = text.split(NL + NL).join('<br><br>');\nreturn { json: { text, html } };"
+      }
+    },
+    {
+      "id": "gmail_digest",
+      "name": "Gmail Digest",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [3540, 400],
+      "parameters": {
+        "sendTo": "={{ $('Config').first().json.recipientEmail }}",
+        "subject": "=Daily AI Newsletter - {{ $now.format('yyyy-MM-dd') }}",
+        "message": "={{ $json.html }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "REPLACE_GMAIL_CRED",
+          "name": "Gmail OAuth2 API"
+        }
+      }
+    },
+    {
+      "id": "gmail_no_news",
+      "name": "Gmail No News",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [3100, 640],
+      "parameters": {
+        "sendTo": "={{ $('Config').first().json.recipientEmail }}",
+        "subject": "=Daily AI Newsletter - {{ $now.format('yyyy-MM-dd') }} (No major signals)",
+        "message": "No major AI signals in the last 24 hours met the inclusion criteria.",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "REPLACE_GMAIL_CRED",
+          "name": "Gmail OAuth2 API"
+        }
       }
     }
   ],
   "connections": {
     "Manual Trigger": {
-      "main": [[{ "node": "Get Log", "type": "main", "index": 0 }]]
+      "main": [[{ "node": "Config", "type": "main", "index": 0 }]]
     },
     "Schedule Trigger 24h": {
+      "main": [[{ "node": "Config", "type": "main", "index": 0 }]]
+    },
+    "Config": {
       "main": [[{ "node": "Get Log", "type": "main", "index": 0 }]]
     },
     "Get Log": {
@@ -295,8 +547,42 @@
     "Classify": {
       "main": [[{ "node": "Parse Classification", "type": "main", "index": 0 }]]
     },
+    "Parse Classification": {
+      "main": [
+        [
+          { "node": "IF Include", "type": "main", "index": 0 },
+          { "node": "Aggregate Included", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "IF Include": {
+      "main": [
+        [{ "node": "Log Included", "type": "main", "index": 0 }],
+        [{ "node": "Log Excluded", "type": "main", "index": 0 }]
+      ]
+    },
+    "Aggregate Included": {
+      "main": [[{ "node": "IF Has Signals", "type": "main", "index": 0 }]]
+    },
+    "IF Has Signals": {
+      "main": [
+        [{ "node": "Synthesize", "type": "main", "index": 0 }],
+        [{ "node": "Gmail No News", "type": "main", "index": 0 }]
+      ]
+    },
+    "Synthesize": {
+      "main": [[{ "node": "Sanitize Text", "type": "main", "index": 0 }]]
+    },
+    "Sanitize Text": {
+      "main": [[{ "node": "Gmail Digest", "type": "main", "index": 0 }]]
+    },
     "Groq Chat Model": {
-      "ai_languageModel": [[{ "node": "Classify", "type": "ai_languageModel", "index": 0 }]]
+      "ai_languageModel": [
+        [
+          { "node": "Classify", "type": "ai_languageModel", "index": 0 },
+          { "node": "Synthesize", "type": "ai_languageModel", "index": 0 }
+        ]
+      ]
     }
   }
 }
