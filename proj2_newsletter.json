@@ -186,7 +186,7 @@
       "position": [1320, 320],
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const logUrls = new Set($('Get Log').all().map(item => (item.json['Signal URL'] || '').toString().trim()).filter(u => u.length > 0));\nconst seen = new Set();\nconst survivors = [];\nfor (const input of $input.all()) {\n  const j = input.json || {};\n  const url = (j.url || '').toString().trim();\n  if (!url) continue;\n  if (!j.isRelevant) continue;\n  if (logUrls.has(url)) continue;\n  if (seen.has(url)) continue;\n  seen.add(url);\n  survivors.push({ json: j });\n}\nif (survivors.length === 0) {\n  return [{ json: { sentinel: true, url: '' } }];\n}\nreturn survivors;"
+        "jsCode": "const logUrls = new Set($('Get Log').all().map(item => (item.json['Signal URL'] || '').toString().trim()).filter(u => u.length > 0));\nconst survivors = [];\nfor (const input of $input.all()) {\n  const j = input.json || {};\n  const url = (j.url || '').toString().trim();\n  if (!url) continue;\n  if (!j.isRelevant) continue;\n  if (logUrls.has(url)) continue;\n  survivors.push({ json: j });\n}\nif (survivors.length === 0) {\n  return [{ json: { sentinel: true, url: '' } }];\n}\nreturn survivors;"
       }
     },
     {
