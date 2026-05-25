@@ -59,7 +59,7 @@
       "position": [0, 320],
       "parameters": {
         "resource": "sheetWithinDocument",
-        "operation": "getRows",
+        "operation": "read",
         "documentId": {
           "__rl": true,
           "mode": "list",
@@ -89,7 +89,7 @@
       "position": [220, 320],
       "parameters": {
         "resource": "sheetWithinDocument",
-        "operation": "getRows",
+        "operation": "read",
         "documentId": {
           "__rl": true,
           "mode": "list",

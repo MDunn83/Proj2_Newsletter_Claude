@@ -104,7 +104,7 @@ Groq Chat Model connects via `ai_languageModel` to **both** `Classify` and `Synt
 - **Groq rate safety** = `retryOnFail` + 5s backoff on both LLM nodes (the real throttle); `Wait 3s` adds spacing.
 - **Sanitize preserves paragraphs.** Single newlines → spaces, double newlines → paragraph breaks; also emits an `html` field (`<br><br>`) for the Gmail body. Uses `String.fromCharCode` instead of escaped regex to avoid JSON double-escaping.
 - **Recipient is never hardcoded.** Both Gmail nodes read `={{ $('Config').first().json.recipientEmail }}`; the placeholder lives only in the `Config` node.
-- **Google Sheets nodes use `"resource": "sheetWithinDocument"`** with `operation` `getRows`/`append`, and `documentId`/`sheetName` as `"mode": "list"` resourceLocators. This n8n version requires the `resource` field and renders fine with it — do NOT strip it (the skill file's "never add resource" rule is outdated for this instance, verified against the live node).
+- **Google Sheets nodes use `"resource": "sheetWithinDocument"`** with `operation` `read` (the "Get Row(s)" op) for reads and `append` for logs, and `documentId`/`sheetName` as `"mode": "list"` resourceLocators. Two corrections to the skill file, both verified against the live node: (1) the `resource` field IS required and renders fine — do NOT strip it; (2) the read operation is **`read`**, NOT `getRows` (the skill file's `getRows` value is invalid in this n8n version and shows a red warning).
 
 ---
 
