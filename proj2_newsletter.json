@@ -10,7 +10,7 @@
       "name": "Manual Trigger",
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
-      "position": [0, 200],
+      "position": [-440, 320],
       "parameters": {}
     },
     {
@@ -18,7 +18,7 @@
       "name": "Schedule Trigger 24h",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [0, 440],
+      "position": [-440, 540],
       "parameters": {
         "rule": {
           "interval": [
@@ -32,11 +32,31 @@
       }
     },
     {
+      "id": "config",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-220, 320],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a_recipient",
+              "name": "recipientEmail",
+              "type": "string",
+              "value": "YOUR_RECIPIENT_EMAIL"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
       "id": "get_log",
       "name": "Get Log",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4,
-      "position": [240, 320],
+      "position": [0, 320],
       "parameters": {
         "operation": "getRows",
         "documentId": {
@@ -64,7 +84,7 @@
       "name": "Get Targets",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4,
-      "position": [460, 320],
+      "position": [220, 320],
       "parameters": {
         "operation": "getRows",
         "documentId": {
@@ -92,7 +112,7 @@
       "name": "Build RSS URL",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [680, 320],
+      "position": [440, 320],
       "parameters": {
         "mode": "runOnceForEachItem",
         "jsCode": "const companyName = $json['Company Name'] || '';\nconst anchor = ($json['Anchor'] || companyName).toString();\nconst sector = $json['Sector'] || '';\nconst website = $json['Website URL'] || '';\nconst query = encodeURIComponent(anchor + ' when:2d');\nconst rssUrl = 'https://news.google.com/rss/search?q=' + query + '&hl=en-US&gl=US&ceid=US:en';\nreturn { json: { companyName, anchor, sector, website, rssUrl } };"
@@ -103,7 +123,7 @@
       "name": "Fetch News",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [900, 320],
+      "position": [660, 320],
       "onError": "continueRegularOutput",
       "retryOnFail": true,
       "maxTries": 3,
@@ -140,7 +160,8 @@
       "name": "Parse Articles",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1120, 320],
+      "position": [880, 320],
+      "alwaysOutputData": true,
       "parameters": {
         "mode": "runOnceForAllItems",
         "jsCode": "const targets = $('Get Targets').all();\nconst responses = $input.all();\nconst cutoff = Date.now() - (48 * 60 * 60 * 1000);\nconst out = [];\nfor (let i = 0; i < responses.length; i++) {\n  const t = (targets[i] && targets[i].json) ? targets[i].json : {};\n  const companyName = t['Company Name'] || '';\n  const anchor = t['Anchor'] || '';\n  const sector = t['Sector'] || '';\n  const xml = (responses[i].json.data || '').toString();\n  const blocks = xml.match(new RegExp('<item>[^]*?</item>', 'g')) || [];\n  const getTag = (block, tag) => {\n    const m = block.match(new RegExp('<' + tag + '>([^]*?)</' + tag + '>'));\n    if (!m) return '';\n    let v = m[1];\n    v = v.split('<![CDATA[').join('').split(']]>').join('');\n    return v.trim();\n  };\n  let count = 0;\n  for (const block of blocks) {\n    if (count >= 6) break;\n    const title = getTag(block, 'title');\n    const link = getTag(block, 'link');\n    const pubDate = getTag(block, 'pubDate');\n    let description = getTag(block, 'description');\n    description = description.replace(new RegExp('<[^>]+>', 'g'), ' ').replace(new RegExp('  +', 'g'), ' ').trim();\n    const pubMs = pubDate ? new Date(pubDate).getTime() : 0;\n    if (pubMs && pubMs < cutoff) continue;\n    if (!title || !link) continue;\n    out.push({ json: { companyName, anchor, sector, title, url: link, pubDate, description } });\n    count++;\n  }\n}\nreturn out;"
@@ -151,52 +172,21 @@
       "name": "Relevance Pre-filter",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1340, 320],
+      "position": [1100, 320],
       "parameters": {
         "mode": "runOnceForEachItem",
         "jsCode": "const companyName = ($json.companyName || '').toString();\nconst anchor = ($json.anchor || '').toString();\nconst sector = ($json.sector || '').toString();\nconst title = ($json.title || '').toString();\nconst url = ($json.url || '').toString();\nconst pubDate = ($json.pubDate || '').toString();\nconst description = ($json.description || '').toString();\nconst haystack = (title + ' ' + description.substring(0, 500)).toLowerCase();\nconst aliases = [];\nif (companyName) aliases.push(companyName.toLowerCase());\nif (anchor) aliases.push(anchor.toLowerCase());\ncompanyName.split(' ').forEach(tok => { if (tok.length >= 4) aliases.push(tok.toLowerCase()); });\nlet isRelevant = false;\nfor (const a of aliases) { if (a && haystack.indexOf(a) !== -1) { isRelevant = true; break; } }\nreturn { json: { companyName, anchor, sector, title, url, pubDate, description, isRelevant } };"
       }
     },
     {
-      "id": "if_relevant",
-      "name": "IF Relevant",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
-      "position": [1560, 320],
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "loose",
-            "version": 2
-          },
-          "conditions": [
-            {
-              "id": "cond_relevant",
-              "leftValue": "={{ $json.isRelevant }}",
-              "rightValue": "",
-              "operator": {
-                "type": "boolean",
-                "operation": "true",
-                "singleValue": true
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      }
-    },
-    {
-      "id": "dedup",
-      "name": "Dedup",
+      "id": "filter_dedup",
+      "name": "Filter & Dedup",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1780, 220],
+      "position": [1320, 320],
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const logRows = $('Get Log').all();\nconst logUrls = new Set(logRows.map(item => (item.json['Signal URL'] || '').toString().trim()).filter(u => u.length > 0));\nconst out = [];\nfor (const input of $input.all()) {\n  const url = (input.json.url || '').toString().trim();\n  if (url && !logUrls.has(url)) {\n    out.push({ json: input.json });\n  }\n}\nreturn out;"
+        "jsCode": "const logUrls = new Set($('Get Log').all().map(item => (item.json['Signal URL'] || '').toString().trim()).filter(u => u.length > 0));\nconst seen = new Set();\nconst survivors = [];\nfor (const input of $input.all()) {\n  const j = input.json || {};\n  const url = (j.url || '').toString().trim();\n  if (!url) continue;\n  if (!j.isRelevant) continue;\n  if (logUrls.has(url)) continue;\n  if (seen.has(url)) continue;\n  seen.add(url);\n  survivors.push({ json: j });\n}\nif (survivors.length === 0) {\n  return [{ json: { sentinel: true, url: '' } }];\n}\nreturn survivors;"
       }
     },
     {
@@ -204,7 +194,7 @@
       "name": "Wait 3s",
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,
-      "position": [2000, 220],
+      "position": [1540, 320],
       "parameters": {
         "resume": "timeInterval",
         "amount": 3,
@@ -216,7 +206,7 @@
       "name": "Classify",
       "type": "@n8n/n8n-nodes-langchain.chainLlm",
       "typeVersion": 1.4,
-      "position": [2220, 220],
+      "position": [1760, 320],
       "onError": "continueRegularOutput",
       "retryOnFail": true,
       "maxTries": 3,
@@ -231,7 +221,7 @@
       "name": "Groq Chat Model",
       "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
       "typeVersion": 1,
-      "position": [2220, 440],
+      "position": [1760, 540],
       "parameters": {
         "model": "llama-3.3-70b-versatile",
         "options": {}
@@ -248,28 +238,39 @@
       "name": "Parse Classification",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2440, 220],
+      "position": [1980, 320],
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const raw = ($json.text || '').toString().trim();\nconst src = $('Dedup').item.json;\nconst companyName = (src.companyName || '').toString();\nconst anchor = (src.anchor || '').toString();\nconst sector = (src.sector || '').toString();\nconst title = (src.title || '').toString();\nconst url = (src.url || '').toString();\nconst pubDate = (src.pubDate || '').toString();\nconst description = (src.description || '').toString();\nconst allowed = ['Product Launch','Partnership','Funding','Leadership Change','Research Publication','Hiring Signal','Regulatory/Legal','Other'];\nfunction parseFundingToMillions(str) {\n  if (!str) return null;\n  let s = str.toString().toUpperCase().split(',').join('').split('$').join('').trim();\n  let mult = 1;\n  if (s.indexOf('B') !== -1) mult = 1000;\n  else if (s.indexOf('M') !== -1) mult = 1;\n  else if (s.indexOf('K') !== -1) mult = 0.001;\n  const num = parseFloat(s);\n  if (isNaN(num)) return null;\n  return num * mult;\n}\nfunction grab(text, key) {\n  const marker = '\"' + key + '\"';\n  let i = text.indexOf(marker);\n  if (i === -1) return '';\n  i = text.indexOf(':', i);\n  if (i === -1) return '';\n  const q1 = text.indexOf('\"', i);\n  if (q1 === -1) return '';\n  const q2 = text.indexOf('\"', q1 + 1);\n  if (q2 === -1) return '';\n  return text.substring(q1 + 1, q2);\n}\nlet category = 'Other';\nlet funding = 'N/A';\nlet summary = '';\ntry {\n  const cleaned = raw.split('```json').join('').split('```').join('').trim();\n  const parsed = JSON.parse(cleaned);\n  category = (parsed.category || 'Other').toString().trim();\n  funding = (parsed.funding || 'N/A').toString().trim();\n  summary = (parsed.summary || '').toString().trim();\n} catch (e) {\n  const c = grab(raw, 'category');\n  const f = grab(raw, 'funding');\n  const s = grab(raw, 'summary');\n  if (c) category = c.trim();\n  if (f) funding = f.trim();\n  if (s) summary = s.trim();\n}\nif (allowed.indexOf(category) === -1) category = 'Other';\nconst fundingMillions = parseFundingToMillions(funding);\nconst isMonetary = (category === 'Funding');\nlet include = false;\nif (category !== 'Other') {\n  if (isMonetary) { include = (fundingMillions !== null && fundingMillions >= 100); }\n  else { include = true; }\n}\nlet reason = 'Included';\nif (category === 'Other') reason = 'Excluded: category Other';\nelse if (isMonetary && !(fundingMillions !== null && fundingMillions >= 100)) reason = 'Excluded: below $100M threshold';\nreturn { json: { companyName, anchor, sector, title, url, pubDate, description, category, funding, fundingMillions, summary, include, reason } };"
+        "jsCode": "const raw = ($json.text || '').toString().trim();\nconst src = $('Filter & Dedup').item.json || {};\nconst isSentinel = src.sentinel === true || !src.url;\nif (isSentinel) {\n  return { json: { isReal: false, isSentinel: true, include: false, companyName: '', anchor: '', sector: '', title: '', url: '', pubDate: '', description: '', category: '', funding: 'N/A', fundingMillions: null, summary: '', reason: 'No new articles' } };\n}\nconst companyName = (src.companyName || '').toString();\nconst anchor = (src.anchor || '').toString();\nconst sector = (src.sector || '').toString();\nconst title = (src.title || '').toString();\nconst url = (src.url || '').toString();\nconst pubDate = (src.pubDate || '').toString();\nconst description = (src.description || '').toString();\nconst allowed = ['Product Launch','Partnership','Funding','Leadership Change','Research Publication','Hiring Signal','Regulatory/Legal','Other'];\nfunction parseFundingToMillions(str) {\n  if (!str) return null;\n  let s = str.toString().toUpperCase().split(',').join('').split('$').join('').trim();\n  let mult = 1;\n  if (s.indexOf('B') !== -1) mult = 1000;\n  else if (s.indexOf('M') !== -1) mult = 1;\n  else if (s.indexOf('K') !== -1) mult = 0.001;\n  const num = parseFloat(s);\n  if (isNaN(num)) return null;\n  return num * mult;\n}\nfunction grab(text, key) {\n  const marker = '\"' + key + '\"';\n  let i = text.indexOf(marker);\n  if (i === -1) return '';\n  i = text.indexOf(':', i);\n  if (i === -1) return '';\n  const q1 = text.indexOf('\"', i);\n  if (q1 === -1) return '';\n  const q2 = text.indexOf('\"', q1 + 1);\n  if (q2 === -1) return '';\n  return text.substring(q1 + 1, q2);\n}\nlet category = 'Other';\nlet funding = 'N/A';\nlet summary = '';\ntry {\n  const cleaned = raw.split('```json').join('').split('```').join('').trim();\n  const parsed = JSON.parse(cleaned);\n  category = (parsed.category || 'Other').toString().trim();\n  funding = (parsed.funding || 'N/A').toString().trim();\n  summary = (parsed.summary || '').toString().trim();\n} catch (e) {\n  const c = grab(raw, 'category');\n  const f = grab(raw, 'funding');\n  const s = grab(raw, 'summary');\n  if (c) category = c.trim();\n  if (f) funding = f.trim();\n  if (s) summary = s.trim();\n}\nwhile (category.length && category.charAt(category.length - 1) === '.') category = category.slice(0, -1);\ncategory = category.trim();\nlet canon = 'Other';\nfor (const a of allowed) { if (a.toLowerCase() === category.toLowerCase()) { canon = a; break; } }\ncategory = canon;\nconst fundingMillions = parseFundingToMillions(funding);\nconst isMonetary = (category === 'Funding');\nlet include = false;\nif (category !== 'Other') {\n  if (isMonetary) { include = (fundingMillions !== null && fundingMillions >= 100); }\n  else { include = true; }\n}\nlet reason = 'Included';\nif (category === 'Other') reason = 'Excluded: category Other';\nelse if (isMonetary && !(fundingMillions !== null && fundingMillions >= 100)) reason = 'Excluded: below $100M threshold';\nreturn { json: { isReal: true, isSentinel: false, companyName, anchor, sector, title, url, pubDate, description, category, funding, fundingMillions, summary, include, reason } };"
       }
     },
     {
-      "id": "config",
-      "name": "Config",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3.4,
-      "position": [-220, 320],
+      "id": "if_real",
+      "name": "IF Real",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2200, 200],
       "parameters": {
-        "assignments": {
-          "assignments": [
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
             {
-              "id": "a_recipient",
-              "name": "recipientEmail",
-              "type": "string",
-              "value": "YOUR_RECIPIENT_EMAIL"
+              "id": "cond_real",
+              "leftValue": "={{ $json.isReal }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
             }
-          ]
+          ],
+          "combinator": "and"
         },
         "options": {}
       }
@@ -279,7 +280,7 @@
       "name": "IF Include",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [2660, 220],
+      "position": [2420, 200],
       "parameters": {
         "conditions": {
           "options": {
@@ -310,7 +311,7 @@
       "name": "Log Included",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4,
-      "position": [2880, 120],
+      "position": [2640, 100],
       "parameters": {
         "operation": "append",
         "documentId": {
@@ -354,7 +355,7 @@
       "name": "Log Excluded",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4,
-      "position": [2880, 320],
+      "position": [2640, 300],
       "parameters": {
         "operation": "append",
         "documentId": {
@@ -398,7 +399,7 @@
       "name": "Aggregate Included",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2660, 480],
+      "position": [2200, 480],
       "parameters": {
         "mode": "runOnceForAllItems",
         "jsCode": "const NL = String.fromCharCode(10);\nconst items = $input.all();\nconst included = [];\nfor (const it of items) {\n  const j = it.json || {};\n  if (j.include === true) included.push(j);\n}\nlet combined = '';\nfor (let i = 0; i < included.length; i++) {\n  const a = included[i];\n  combined += (i + 1) + '. Company: ' + (a.companyName || '') + NL;\n  combined += 'Category: ' + (a.category || '') + NL;\n  if (a.funding && a.funding !== 'N/A') combined += 'Funding/Value: ' + a.funding + NL;\n  combined += 'Headline: ' + (a.title || '') + NL;\n  combined += 'Summary: ' + (a.summary || '') + NL;\n  combined += 'Source: ' + (a.url || '') + NL + NL;\n}\nconst count = included.length;\nconst hasSignals = count > 0;\nreturn [{ json: { count, hasSignals, combined } }];"
@@ -409,7 +410,7 @@
       "name": "IF Has Signals",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [2880, 480],
+      "position": [2420, 480],
       "parameters": {
         "conditions": {
           "options": {
@@ -440,7 +441,7 @@
       "name": "Synthesize",
       "type": "@n8n/n8n-nodes-langchain.chainLlm",
       "typeVersion": 1.4,
-      "position": [3100, 400],
+      "position": [2640, 460],
       "onError": "continueRegularOutput",
       "retryOnFail": true,
       "maxTries": 3,
@@ -455,7 +456,7 @@
       "name": "Sanitize Text",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [3320, 400],
+      "position": [2860, 460],
       "parameters": {
         "mode": "runOnceForEachItem",
         "jsCode": "const NL = String.fromCharCode(10);\nconst BS = String.fromCharCode(92);\nconst PARA = String.fromCharCode(1);\nlet text = ($json.text || '').toString();\ntext = text.split(BS + 'n').join(NL);\ntext = text.split(NL + NL).join(PARA);\ntext = text.split(NL).join(' ');\ntext = text.split(PARA).join(NL + NL);\nwhile (text.indexOf('  ') !== -1) { text = text.split('  ').join(' '); }\ntext = text.trim();\nconst html = text.split(NL + NL).join('<br><br>');\nreturn { json: { text, html } };"
@@ -466,7 +467,7 @@
       "name": "Gmail Digest",
       "type": "n8n-nodes-base.gmail",
       "typeVersion": 2,
-      "position": [3540, 400],
+      "position": [3080, 460],
       "parameters": {
         "sendTo": "={{ $('Config').first().json.recipientEmail }}",
         "subject": "=Daily AI Newsletter - {{ $now.format('yyyy-MM-dd') }}",
@@ -487,7 +488,7 @@
       "name": "Gmail No News",
       "type": "n8n-nodes-base.gmail",
       "typeVersion": 2,
-      "position": [3100, 640],
+      "position": [2640, 660],
       "parameters": {
         "sendTo": "={{ $('Config').first().json.recipientEmail }}",
         "subject": "=Daily AI Newsletter - {{ $now.format('yyyy-MM-dd') }} (No major signals)",
@@ -530,15 +531,9 @@
       "main": [[{ "node": "Relevance Pre-filter", "type": "main", "index": 0 }]]
     },
     "Relevance Pre-filter": {
-      "main": [[{ "node": "IF Relevant", "type": "main", "index": 0 }]]
+      "main": [[{ "node": "Filter & Dedup", "type": "main", "index": 0 }]]
     },
-    "IF Relevant": {
-      "main": [
-        [{ "node": "Dedup", "type": "main", "index": 0 }],
-        []
-      ]
-    },
-    "Dedup": {
+    "Filter & Dedup": {
       "main": [[{ "node": "Wait 3s", "type": "main", "index": 0 }]]
     },
     "Wait 3s": {
@@ -550,9 +545,15 @@
     "Parse Classification": {
       "main": [
         [
-          { "node": "IF Include", "type": "main", "index": 0 },
+          { "node": "IF Real", "type": "main", "index": 0 },
           { "node": "Aggregate Included", "type": "main", "index": 0 }
         ]
+      ]
+    },
+    "IF Real": {
+      "main": [
+        [{ "node": "IF Include", "type": "main", "index": 0 }],
+        []
       ]
     },
     "IF Include": {
