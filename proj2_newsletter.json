@@ -58,11 +58,13 @@
       "typeVersion": 4,
       "position": [0, 320],
       "parameters": {
+        "resource": "sheetWithinDocument",
         "operation": "getRows",
         "documentId": {
           "__rl": true,
-          "mode": "id",
-          "value": "YOUR_GOOGLE_SHEET_ID"
+          "mode": "list",
+          "value": "YOUR_GOOGLE_SHEET_ID",
+          "cachedResultName": "Proj2_Claude"
         },
         "sheetName": {
           "__rl": true,
@@ -86,11 +88,13 @@
       "typeVersion": 4,
       "position": [220, 320],
       "parameters": {
+        "resource": "sheetWithinDocument",
         "operation": "getRows",
         "documentId": {
           "__rl": true,
-          "mode": "id",
-          "value": "YOUR_GOOGLE_SHEET_ID"
+          "mode": "list",
+          "value": "YOUR_GOOGLE_SHEET_ID",
+          "cachedResultName": "Proj2_Claude"
         },
         "sheetName": {
           "__rl": true,
@@ -313,11 +317,13 @@
       "typeVersion": 4,
       "position": [2640, 100],
       "parameters": {
+        "resource": "sheetWithinDocument",
         "operation": "append",
         "documentId": {
           "__rl": true,
-          "mode": "id",
-          "value": "YOUR_GOOGLE_SHEET_ID"
+          "mode": "list",
+          "value": "YOUR_GOOGLE_SHEET_ID",
+          "cachedResultName": "Proj2_Claude"
         },
         "sheetName": {
           "__rl": true,
@@ -357,11 +363,13 @@
       "typeVersion": 4,
       "position": [2640, 300],
       "parameters": {
+        "resource": "sheetWithinDocument",
         "operation": "append",
         "documentId": {
           "__rl": true,
-          "mode": "id",
-          "value": "YOUR_GOOGLE_SHEET_ID"
+          "mode": "list",
+          "value": "YOUR_GOOGLE_SHEET_ID",
+          "cachedResultName": "Proj2_Claude"
         },
         "sheetName": {
           "__rl": true,
