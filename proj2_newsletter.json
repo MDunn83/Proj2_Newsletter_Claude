@@ -198,6 +198,61 @@
         "mode": "runOnceForAllItems",
         "jsCode": "const logRows = $('Get Log').all();\nconst logUrls = new Set(logRows.map(item => (item.json['Signal URL'] || '').toString().trim()).filter(u => u.length > 0));\nconst out = [];\nfor (const input of $input.all()) {\n  const url = (input.json.url || '').toString().trim();\n  if (url && !logUrls.has(url)) {\n    out.push({ json: input.json });\n  }\n}\nreturn out;"
       }
+    },
+    {
+      "id": "wait_3s",
+      "name": "Wait 3s",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [2000, 220],
+      "parameters": {
+        "resume": "timeInterval",
+        "amount": 3,
+        "unit": "seconds"
+      }
+    },
+    {
+      "id": "classify",
+      "name": "Classify",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.4,
+      "position": [2220, 220],
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "parameters": {
+        "promptType": "define",
+        "text": "=Company: {{ $json.companyName }}\nSector: {{ $json.sector }}\nTitle: {{ $json.title }}\nDescription: {{ $json.description }}\n\nClassify this article into EXACTLY ONE category from this list (use the exact label): Product Launch, Partnership, Funding, Leadership Change, Research Publication, Hiring Signal, Regulatory/Legal, Other.\n\nExtract any monetary amount central to the story (funding raised, acquisition or deal value). Use suffix notation like $30B, $500M, $2.5M. If there is no monetary amount, use N/A.\n\nWrite a factual 1-2 sentence summary of the development.\n\nReturn ONLY raw JSON with no markdown fences, in exactly this shape:\n{\"category\": \"<one of the categories above>\", \"funding\": \"<amount or N/A>\", \"summary\": \"<1-2 sentence summary>\"}\n\nOutput ONLY the requested content. Begin directly with the first line of output. Do not include any introductory text, preamble, or closing remarks."
+      }
+    },
+    {
+      "id": "groq_model",
+      "name": "Groq Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [2220, 440],
+      "parameters": {
+        "model": "llama-3.3-70b-versatile",
+        "options": {}
+      },
+      "credentials": {
+        "groqApi": {
+          "id": "REPLACE_GROQ_CRED",
+          "name": "Groq account"
+        }
+      }
+    },
+    {
+      "id": "parse_classification",
+      "name": "Parse Classification",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2440, 220],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const raw = ($json.text || '').toString().trim();\nconst src = $('Dedup').item.json;\nconst companyName = (src.companyName || '').toString();\nconst anchor = (src.anchor || '').toString();\nconst sector = (src.sector || '').toString();\nconst title = (src.title || '').toString();\nconst url = (src.url || '').toString();\nconst pubDate = (src.pubDate || '').toString();\nconst description = (src.description || '').toString();\nconst allowed = ['Product Launch','Partnership','Funding','Leadership Change','Research Publication','Hiring Signal','Regulatory/Legal','Other'];\nfunction parseFundingToMillions(str) {\n  if (!str) return null;\n  let s = str.toString().toUpperCase().split(',').join('').split('$').join('').trim();\n  let mult = 1;\n  if (s.indexOf('B') !== -1) mult = 1000;\n  else if (s.indexOf('M') !== -1) mult = 1;\n  else if (s.indexOf('K') !== -1) mult = 0.001;\n  const num = parseFloat(s);\n  if (isNaN(num)) return null;\n  return num * mult;\n}\nfunction grab(text, key) {\n  const marker = '\"' + key + '\"';\n  let i = text.indexOf(marker);\n  if (i === -1) return '';\n  i = text.indexOf(':', i);\n  if (i === -1) return '';\n  const q1 = text.indexOf('\"', i);\n  if (q1 === -1) return '';\n  const q2 = text.indexOf('\"', q1 + 1);\n  if (q2 === -1) return '';\n  return text.substring(q1 + 1, q2);\n}\nlet category = 'Other';\nlet funding = 'N/A';\nlet summary = '';\ntry {\n  const cleaned = raw.split('```json').join('').split('```').join('').trim();\n  const parsed = JSON.parse(cleaned);\n  category = (parsed.category || 'Other').toString().trim();\n  funding = (parsed.funding || 'N/A').toString().trim();\n  summary = (parsed.summary || '').toString().trim();\n} catch (e) {\n  const c = grab(raw, 'category');\n  const f = grab(raw, 'funding');\n  const s = grab(raw, 'summary');\n  if (c) category = c.trim();\n  if (f) funding = f.trim();\n  if (s) summary = s.trim();\n}\nif (allowed.indexOf(category) === -1) category = 'Other';\nconst fundingMillions = parseFundingToMillions(funding);\nconst isMonetary = (category === 'Funding' || category === 'Partnership');\nlet include = false;\nif (category !== 'Other') {\n  if (isMonetary) { include = (fundingMillions !== null && fundingMillions >= 100); }\n  else { include = true; }\n}\nlet reason = 'Included';\nif (category === 'Other') reason = 'Excluded: category Other';\nelse if (isMonetary && !(fundingMillions !== null && fundingMillions >= 100)) reason = 'Excluded: below $100M threshold';\nreturn { json: { companyName, anchor, sector, title, url, pubDate, description, category, funding, fundingMillions, summary, include, reason } };"
+      }
     }
   ],
   "connections": {
@@ -230,6 +285,18 @@
         [{ "node": "Dedup", "type": "main", "index": 0 }],
         []
       ]
+    },
+    "Dedup": {
+      "main": [[{ "node": "Wait 3s", "type": "main", "index": 0 }]]
+    },
+    "Wait 3s": {
+      "main": [[{ "node": "Classify", "type": "main", "index": 0 }]]
+    },
+    "Classify": {
+      "main": [[{ "node": "Parse Classification", "type": "main", "index": 0 }]]
+    },
+    "Groq Chat Model": {
+      "ai_languageModel": [[{ "node": "Classify", "type": "ai_languageModel", "index": 0 }]]
     }
   }
 }
