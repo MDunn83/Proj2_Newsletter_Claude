@@ -61,13 +61,14 @@
         "operation": "read",
         "documentId": {
           "__rl": true,
-          "mode": "id",
-          "value": "YOUR_GOOGLE_SHEET_ID"
+          "mode": "list",
+          "value": "1An48EJ3ikZOiwB-4wnO-XNqAO7lX_7OIsIOc8swAljY",
+          "cachedResultName": "Proj2_Claude"
         },
         "sheetName": {
           "__rl": true,
           "mode": "list",
-          "value": "GID_OF_LOG_TAB",
+          "value": "802787579",
           "cachedResultName": "Log"
         },
         "options": {}
@@ -89,13 +90,14 @@
         "operation": "read",
         "documentId": {
           "__rl": true,
-          "mode": "id",
-          "value": "YOUR_GOOGLE_SHEET_ID"
+          "mode": "list",
+          "value": "1An48EJ3ikZOiwB-4wnO-XNqAO7lX_7OIsIOc8swAljY",
+          "cachedResultName": "Proj2_Claude"
         },
         "sheetName": {
           "__rl": true,
           "mode": "list",
-          "value": "GID_OF_TARGETS_TAB",
+          "value": "0",
           "cachedResultName": "Targets"
         },
         "options": {}
@@ -316,13 +318,14 @@
         "operation": "append",
         "documentId": {
           "__rl": true,
-          "mode": "id",
-          "value": "YOUR_GOOGLE_SHEET_ID"
+          "mode": "list",
+          "value": "1An48EJ3ikZOiwB-4wnO-XNqAO7lX_7OIsIOc8swAljY",
+          "cachedResultName": "Proj2_Claude"
         },
         "sheetName": {
           "__rl": true,
           "mode": "list",
-          "value": "GID_OF_LOG_TAB",
+          "value": "802787579",
           "cachedResultName": "Log"
         },
         "columns": {
@@ -360,13 +363,14 @@
         "operation": "append",
         "documentId": {
           "__rl": true,
-          "mode": "id",
-          "value": "YOUR_GOOGLE_SHEET_ID"
+          "mode": "list",
+          "value": "1An48EJ3ikZOiwB-4wnO-XNqAO7lX_7OIsIOc8swAljY",
+          "cachedResultName": "Proj2_Claude"
         },
         "sheetName": {
           "__rl": true,
           "mode": "list",
-          "value": "GID_OF_LOG_TAB",
+          "value": "802787579",
           "cachedResultName": "Log"
         },
         "columns": {
