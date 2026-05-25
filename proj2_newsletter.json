@@ -145,6 +145,59 @@
         "mode": "runOnceForAllItems",
         "jsCode": "const targets = $('Get Targets').all();\nconst responses = $input.all();\nconst cutoff = Date.now() - (48 * 60 * 60 * 1000);\nconst out = [];\nfor (let i = 0; i < responses.length; i++) {\n  const t = (targets[i] && targets[i].json) ? targets[i].json : {};\n  const companyName = t['Company Name'] || '';\n  const anchor = t['Anchor'] || '';\n  const sector = t['Sector'] || '';\n  const xml = (responses[i].json.data || '').toString();\n  const blocks = xml.match(new RegExp('<item>[^]*?</item>', 'g')) || [];\n  const getTag = (block, tag) => {\n    const m = block.match(new RegExp('<' + tag + '>([^]*?)</' + tag + '>'));\n    if (!m) return '';\n    let v = m[1];\n    v = v.split('<![CDATA[').join('').split(']]>').join('');\n    return v.trim();\n  };\n  let count = 0;\n  for (const block of blocks) {\n    if (count >= 6) break;\n    const title = getTag(block, 'title');\n    const link = getTag(block, 'link');\n    const pubDate = getTag(block, 'pubDate');\n    let description = getTag(block, 'description');\n    description = description.replace(new RegExp('<[^>]+>', 'g'), ' ').replace(new RegExp('  +', 'g'), ' ').trim();\n    const pubMs = pubDate ? new Date(pubDate).getTime() : 0;\n    if (pubMs && pubMs < cutoff) continue;\n    if (!title || !link) continue;\n    out.push({ json: { companyName, anchor, sector, title, url: link, pubDate, description } });\n    count++;\n  }\n}\nreturn out;"
       }
+    },
+    {
+      "id": "relevance_filter",
+      "name": "Relevance Pre-filter",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1340, 320],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const companyName = ($json.companyName || '').toString();\nconst anchor = ($json.anchor || '').toString();\nconst sector = ($json.sector || '').toString();\nconst title = ($json.title || '').toString();\nconst url = ($json.url || '').toString();\nconst pubDate = ($json.pubDate || '').toString();\nconst description = ($json.description || '').toString();\nconst haystack = (title + ' ' + description.substring(0, 500)).toLowerCase();\nconst aliases = [];\nif (companyName) aliases.push(companyName.toLowerCase());\nif (anchor) aliases.push(anchor.toLowerCase());\ncompanyName.split(' ').forEach(tok => { if (tok.length >= 4) aliases.push(tok.toLowerCase()); });\nlet isRelevant = false;\nfor (const a of aliases) { if (a && haystack.indexOf(a) !== -1) { isRelevant = true; break; } }\nreturn { json: { companyName, anchor, sector, title, url, pubDate, description, isRelevant } };"
+      }
+    },
+    {
+      "id": "if_relevant",
+      "name": "IF Relevant",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1560, 320],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cond_relevant",
+              "leftValue": "={{ $json.isRelevant }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "dedup",
+      "name": "Dedup",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1780, 220],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const logRows = $('Get Log').all();\nconst logUrls = new Set(logRows.map(item => (item.json['Signal URL'] || '').toString().trim()).filter(u => u.length > 0));\nconst out = [];\nfor (const input of $input.all()) {\n  const url = (input.json.url || '').toString().trim();\n  if (url && !logUrls.has(url)) {\n    out.push({ json: input.json });\n  }\n}\nreturn out;"
+      }
     }
   ],
   "connections": {
@@ -165,6 +218,18 @@
     },
     "Fetch News": {
       "main": [[{ "node": "Parse Articles", "type": "main", "index": 0 }]]
+    },
+    "Parse Articles": {
+      "main": [[{ "node": "Relevance Pre-filter", "type": "main", "index": 0 }]]
+    },
+    "Relevance Pre-filter": {
+      "main": [[{ "node": "IF Relevant", "type": "main", "index": 0 }]]
+    },
+    "IF Relevant": {
+      "main": [
+        [{ "node": "Dedup", "type": "main", "index": 0 }],
+        []
+      ]
     }
   }
 }
