@@ -1,0 +1,170 @@
+{
+  "name": "Proj2 Newsletter",
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "nodes": [
+    {
+      "id": "manual_trigger",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [0, 200],
+      "parameters": {}
+    },
+    {
+      "id": "schedule_trigger",
+      "name": "Schedule Trigger 24h",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 440],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "daysInterval": 1,
+              "triggerAtHour": 8
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "get_log",
+      "name": "Get Log",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [240, 320],
+      "parameters": {
+        "operation": "getRows",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_GOOGLE_SHEET_ID"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "GID_OF_LOG_TAB",
+          "cachedResultName": "Log"
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_GOOGLE_SHEETS_CRED",
+          "name": "Google Sheets OAuth2 API"
+        }
+      }
+    },
+    {
+      "id": "get_targets",
+      "name": "Get Targets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [460, 320],
+      "parameters": {
+        "operation": "getRows",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_GOOGLE_SHEET_ID"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "GID_OF_TARGETS_TAB",
+          "cachedResultName": "Targets"
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_GOOGLE_SHEETS_CRED",
+          "name": "Google Sheets OAuth2 API"
+        }
+      }
+    },
+    {
+      "id": "build_rss_url",
+      "name": "Build RSS URL",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 320],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const companyName = $json['Company Name'] || '';\nconst anchor = ($json['Anchor'] || companyName).toString();\nconst sector = $json['Sector'] || '';\nconst website = $json['Website URL'] || '';\nconst query = encodeURIComponent(anchor + ' when:2d');\nconst rssUrl = 'https://news.google.com/rss/search?q=' + query + '&hl=en-US&gl=US&ceid=US:en';\nreturn { json: { companyName, anchor, sector, website, rssUrl } };"
+      }
+    },
+    {
+      "id": "fetch_news",
+      "name": "Fetch News",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [900, 320],
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "parameters": {
+        "url": "={{ $json.rssUrl }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (compatible; n8n-newsletter/1.0)"
+            }
+          ]
+        },
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 1500
+            }
+          },
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          },
+          "timeout": 20000
+        }
+      }
+    },
+    {
+      "id": "parse_articles",
+      "name": "Parse Articles",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 320],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const targets = $('Get Targets').all();\nconst responses = $input.all();\nconst cutoff = Date.now() - (48 * 60 * 60 * 1000);\nconst out = [];\nfor (let i = 0; i < responses.length; i++) {\n  const t = (targets[i] && targets[i].json) ? targets[i].json : {};\n  const companyName = t['Company Name'] || '';\n  const anchor = t['Anchor'] || '';\n  const sector = t['Sector'] || '';\n  const xml = (responses[i].json.data || '').toString();\n  const blocks = xml.match(new RegExp('<item>[^]*?</item>', 'g')) || [];\n  const getTag = (block, tag) => {\n    const m = block.match(new RegExp('<' + tag + '>([^]*?)</' + tag + '>'));\n    if (!m) return '';\n    let v = m[1];\n    v = v.split('<![CDATA[').join('').split(']]>').join('');\n    return v.trim();\n  };\n  let count = 0;\n  for (const block of blocks) {\n    if (count >= 6) break;\n    const title = getTag(block, 'title');\n    const link = getTag(block, 'link');\n    const pubDate = getTag(block, 'pubDate');\n    let description = getTag(block, 'description');\n    description = description.replace(new RegExp('<[^>]+>', 'g'), ' ').replace(new RegExp('  +', 'g'), ' ').trim();\n    const pubMs = pubDate ? new Date(pubDate).getTime() : 0;\n    if (pubMs && pubMs < cutoff) continue;\n    if (!title || !link) continue;\n    out.push({ json: { companyName, anchor, sector, title, url: link, pubDate, description } });\n    count++;\n  }\n}\nreturn out;"
+      }
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [[{ "node": "Get Log", "type": "main", "index": 0 }]]
+    },
+    "Schedule Trigger 24h": {
+      "main": [[{ "node": "Get Log", "type": "main", "index": 0 }]]
+    },
+    "Get Log": {
+      "main": [[{ "node": "Get Targets", "type": "main", "index": 0 }]]
+    },
+    "Get Targets": {
+      "main": [[{ "node": "Build RSS URL", "type": "main", "index": 0 }]]
+    },
+    "Build RSS URL": {
+      "main": [[{ "node": "Fetch News", "type": "main", "index": 0 }]]
+    },
+    "Fetch News": {
+      "main": [[{ "node": "Parse Articles", "type": "main", "index": 0 }]]
+    }
+  }
+}
