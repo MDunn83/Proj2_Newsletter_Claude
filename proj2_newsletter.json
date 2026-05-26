@@ -167,7 +167,7 @@
       "alwaysOutputData": true,
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const targets = $('Get Targets').all();\nconst responses = $input.all();\nconst cutoff = Date.now() - (48 * 60 * 60 * 1000);\nconst out = [];\nfor (let i = 0; i < responses.length; i++) {\n  const t = (targets[i] && targets[i].json) ? targets[i].json : {};\n  const companyName = t['Company Name'] || '';\n  const anchor = t['Anchor'] || '';\n  const sector = t['Sector'] || '';\n  const xml = (responses[i].json.data || '').toString();\n  const blocks = xml.match(new RegExp('<item>[^]*?</item>', 'g')) || [];\n  const getTag = (block, tag) => {\n    const m = block.match(new RegExp('<' + tag + '>([^]*?)</' + tag + '>'));\n    if (!m) return '';\n    let v = m[1];\n    v = v.split('<![CDATA[').join('').split(']]>').join('');\n    return v.trim();\n  };\n  let count = 0;\n  for (const block of blocks) {\n    if (count >= 6) break;\n    const title = getTag(block, 'title');\n    const link = getTag(block, 'link');\n    const pubDate = getTag(block, 'pubDate');\n    let description = getTag(block, 'description');\n    description = description.replace(new RegExp('<[^>]+>', 'g'), ' ').replace(new RegExp('  +', 'g'), ' ').trim();\n    const pubMs = pubDate ? new Date(pubDate).getTime() : 0;\n    if (pubMs && pubMs < cutoff) continue;\n    if (!title || !link) continue;\n    out.push({ json: { companyName, anchor, sector, title, url: link, pubDate, description } });\n    count++;\n  }\n}\nreturn out;"
+        "jsCode": "const targets = $('Get Targets').all();\nconst responses = $input.all();\nconst cutoff = Date.now() - (48 * 60 * 60 * 1000);\nconst out = [];\nfor (let i = 0; i < responses.length; i++) {\n  const t = (targets[i] && targets[i].json) ? targets[i].json : {};\n  const companyName = t['Company Name'] || '';\n  const anchor = t['Anchor'] || '';\n  const sector = t['Sector'] || '';\n  const xml = (responses[i].json.data || '').toString();\n  const blocks = xml.match(new RegExp('<item>[^]*?</item>', 'g')) || [];\n  const getTag = (block, tag) => {\n    const m = block.match(new RegExp('<' + tag + '>([^]*?)</' + tag + '>'));\n    if (!m) return '';\n    let v = m[1];\n    v = v.split('<![CDATA[').join('').split(']]>').join('');\n    return v.trim();\n  };\n  let count = 0;\n  for (const block of blocks) {\n    if (count >= 6) break;\n    const title = getTag(block, 'title');\n    const link = getTag(block, 'link');\n    const pubDate = getTag(block, 'pubDate');\n    let description = getTag(block, 'description');\n    description = description.replace(new RegExp('<[^>]+>', 'g'), ' ').replace(new RegExp('  +', 'g'), ' ').trim().substring(0, 800);\n    const pubMs = pubDate ? new Date(pubDate).getTime() : 0;\n    if (pubMs && pubMs < cutoff) continue;\n    if (!title || !link) continue;\n    out.push({ json: { companyName, anchor, sector, title, url: link, pubDate, description } });\n    count++;\n  }\n}\nreturn out;"
       }
     },
     {
@@ -212,19 +212,36 @@
       "position": [1760, 320],
       "onError": "continueRegularOutput",
       "retryOnFail": true,
-      "maxTries": 3,
-      "waitBetweenTries": 5000,
+      "maxTries": 5,
+      "waitBetweenTries": 45000,
       "parameters": {
         "promptType": "define",
         "text": "=Company: {{ $json.companyName }}\nSector: {{ $json.sector }}\nTitle: {{ $json.title }}\nDescription: {{ $json.description }}\n\nClassify this article into EXACTLY ONE category from this list (use the exact label): Product Launch, Partnership, Funding, Leadership Change, Research Publication, Hiring Signal, Regulatory/Legal, Other.\n\nExtract any monetary amount central to the story (funding raised, acquisition or deal value). Use suffix notation like $30B, $500M, $2.5M. If there is no monetary amount, use N/A.\n\nWrite a factual 1-2 sentence summary of the development.\n\nReturn ONLY raw JSON with no markdown fences, in exactly this shape:\n{\"category\": \"<one of the categories above>\", \"funding\": \"<amount or N/A>\", \"summary\": \"<1-2 sentence summary>\"}\n\nOutput ONLY the requested content. Begin directly with the first line of output. Do not include any introductory text, preamble, or closing remarks."
       }
     },
     {
-      "id": "groq_model",
-      "name": "Groq Chat Model",
+      "id": "groq_classify_model",
+      "name": "Groq Classify Model",
       "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
       "typeVersion": 1,
       "position": [1760, 540],
+      "parameters": {
+        "model": "llama-3.1-8b-instant",
+        "options": {}
+      },
+      "credentials": {
+        "groqApi": {
+          "id": "REPLACE_GROQ_CRED",
+          "name": "Groq account"
+        }
+      }
+    },
+    {
+      "id": "groq_synth_model",
+      "name": "Groq Synth Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [2860, 640],
       "parameters": {
         "model": "llama-3.3-70b-versatile",
         "options": {}
@@ -407,7 +424,7 @@
       "position": [2200, 480],
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const NL = String.fromCharCode(10);\nconst items = $input.all();\nconst included = [];\nfor (const it of items) {\n  const j = it.json || {};\n  if (j.include === true) included.push(j);\n}\nlet combined = '';\nfor (let i = 0; i < included.length; i++) {\n  const a = included[i];\n  combined += (i + 1) + '. Company: ' + (a.companyName || '') + NL;\n  combined += 'Category: ' + (a.category || '') + NL;\n  if (a.funding && a.funding !== 'N/A') combined += 'Funding/Value: ' + a.funding + NL;\n  combined += 'Headline: ' + (a.title || '') + NL;\n  combined += 'Summary: ' + (a.summary || '') + NL;\n  combined += 'Source: ' + (a.url || '') + NL + NL;\n}\nconst count = included.length;\nconst hasSignals = count > 0;\nreturn [{ json: { count, hasSignals, combined } }];"
+        "jsCode": "const NL = String.fromCharCode(10);\nconst items = $input.all();\nconst included = [];\nfor (const it of items) {\n  const j = it.json || {};\n  if (j.include === true) included.push(j);\n}\nlet combined = '';\nfor (let i = 0; i < included.length; i++) {\n  const a = included[i];\n  combined += (i + 1) + '. Company: ' + (a.companyName || '') + NL;\n  combined += 'Category: ' + (a.category || '') + NL;\n  if (a.funding && a.funding !== 'N/A') combined += 'Funding/Value: ' + a.funding + NL;\n  combined += 'Headline: ' + (a.title || '') + NL;\n  combined += 'Summary: ' + (a.summary || '') + NL;\n  combined += 'Source: ' + (a.url || '') + NL + NL;\n}\ncombined = combined.substring(0, 6000);\nconst count = included.length;\nconst hasSignals = count > 0;\nreturn [{ json: { count, hasSignals, combined } }];"
       }
     },
     {
@@ -449,8 +466,8 @@
       "position": [2640, 460],
       "onError": "continueRegularOutput",
       "retryOnFail": true,
-      "maxTries": 3,
-      "waitBetweenTries": 5000,
+      "maxTries": 5,
+      "waitBetweenTries": 45000,
       "parameters": {
         "promptType": "define",
         "text": "=You are writing a concise daily AI industry newsletter.\n\nSynthesize the following company news signals into a cohesive briefing of NO MORE THAN 5 short paragraphs. Group related developments by theme and lead with the most significant. Do not simply list each item; weave them into flowing prose. Do not invent facts beyond what is provided. Do not use bullet points or headings.\n\nSignals:\n{{ $json.combined }}\n\nOutput ONLY the newsletter body. Begin directly with the first paragraph. Do not include a subject line, greeting, preamble, or closing remarks."
@@ -508,6 +525,80 @@
           "name": "Gmail OAuth2 API"
         }
       }
+    },
+    {
+      "id": "find_old_log_rows",
+      "name": "Find Old Log Rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [0, 560],
+      "alwaysOutputData": true,
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const rows = $('Get Log').all();\nconst cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000);\nlet deleteCount = 0;\nfor (const r of rows) {\n  const logged = ((r.json || {})['Logged'] || '').toString();\n  const t = logged ? new Date(logged).getTime() : NaN;\n  if (!isNaN(t) && t < cutoff) { deleteCount++; } else { break; }\n}\nconst hasOld = deleteCount > 0;\nreturn [{ json: { deleteCount, hasOld, startIndex: 1 } }];"
+      }
+    },
+    {
+      "id": "if_has_old_rows",
+      "name": "IF Has Old Rows",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [220, 560],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cond_old",
+              "leftValue": "={{ $json.hasOld }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "delete_old_log_rows",
+      "name": "Delete Old Log Rows",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [440, 560],
+      "parameters": {
+        "operation": "delete",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "1An48EJ3ikZOiwB-4wnO-XNqAO7lX_7OIsIOc8swAljY",
+          "cachedResultName": "Proj2_Claude"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "802787579",
+          "cachedResultName": "Log"
+        },
+        "toDelete": "rows",
+        "startIndex": "={{ $json.startIndex }}",
+        "numberToDelete": "={{ $json.deleteCount }}"
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_GOOGLE_SHEETS_CRED",
+          "name": "Google Sheets OAuth2 API"
+        }
+      }
     }
   ],
   "connections": {
@@ -521,7 +612,21 @@
       "main": [[{ "node": "Get Log", "type": "main", "index": 0 }]]
     },
     "Get Log": {
-      "main": [[{ "node": "Get Targets", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          { "node": "Get Targets", "type": "main", "index": 0 },
+          { "node": "Find Old Log Rows", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Find Old Log Rows": {
+      "main": [[{ "node": "IF Has Old Rows", "type": "main", "index": 0 }]]
+    },
+    "IF Has Old Rows": {
+      "main": [
+        [{ "node": "Delete Old Log Rows", "type": "main", "index": 0 }],
+        []
+      ]
     },
     "Get Targets": {
       "main": [[{ "node": "Build RSS URL", "type": "main", "index": 0 }]]
@@ -582,13 +687,11 @@
     "Sanitize Text": {
       "main": [[{ "node": "Gmail Digest", "type": "main", "index": 0 }]]
     },
-    "Groq Chat Model": {
-      "ai_languageModel": [
-        [
-          { "node": "Classify", "type": "ai_languageModel", "index": 0 },
-          { "node": "Synthesize", "type": "ai_languageModel", "index": 0 }
-        ]
-      ]
+    "Groq Classify Model": {
+      "ai_languageModel": [[{ "node": "Classify", "type": "ai_languageModel", "index": 0 }]]
+    },
+    "Groq Synth Model": {
+      "ai_languageModel": [[{ "node": "Synthesize", "type": "ai_languageModel", "index": 0 }]]
     }
   }
 }

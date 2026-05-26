@@ -19,7 +19,7 @@ Read `n8n_SKILL(2).md` completely before writing or editing any node JSON. It en
 A single n8n workflow (`proj2_newsletter.json`) that produces a **synthesized daily AI-industry newsletter**: it reads 10 companies from a Google Sheet, pulls recent news per company, filters and classifies it, logs every decision, and emails a ≤5-paragraph briefing. Runs every 24h.
 
 - **Platform:** n8n · **Output:** one importable workflow JSON (`proj2_newsletter.json`)
-- **LLM:** Groq, model `llama-3.3-70b-versatile` (free tier)
+- **LLM:** Groq — `llama-3.1-8b-instant` (classify) + `llama-3.3-70b-versatile` (synthesize), free tier
 - **News source:** Google News RSS (free, no key) via HTTP Request
 - **Branch:** develop on `claude/wizardly-lamport-q3VKu` in `MDunn83/Proj2_Newsletter_Claude`
 - **Pushing:** GitHub MCP only (`mcp__github__push_files`). Do not commit via local `git`.
@@ -66,7 +66,7 @@ Do not include any introductory text, preamble, or closing remarks.
 | Signal Type | one of the 8 categories |
 | Summary | LLM 1-2 sentence summary |
 | PubDate | from RSS |
-| Logged | `={{ $now.toISO() }}` |
+| Logged | `={{ $now.toISO() }}` — also the field the 7-day cleanup keys on |
 | Briefing Included | `Yes` (passed filters) / `No` (excluded) |
 | Funding | LLM-extracted amount or `N/A` |
 
@@ -81,14 +81,16 @@ Triggers → Config (recipientEmail) → Get Log → Get Targets
   → Build RSS URL (Anchor + "when:2d") → Fetch News (throttled HTTP)
   → Parse Articles (≤6/company, 48h window; Always Output Data)
   → Relevance Pre-filter → Filter & Dedup → Wait 3s
-  → Classify (Groq) → Parse Classification
+  → Classify (Groq 8b) → Parse Classification
   → ├ IF Real ─true→ IF Include ─true→ Log Included / ─false→ Log Excluded
     └ Aggregate Included → IF Has Signals
-          ├ true → Synthesize → Sanitize Text → Gmail Digest
+          ├ true → Synthesize (Groq 70b) → Sanitize Text → Gmail Digest
           └ false → Gmail No News
 ```
 
-Groq Chat Model connects via `ai_languageModel` to **both** `Classify` and `Synthesize`.
+Two Groq model nodes: **Groq Classify Model** (`llama-3.1-8b-instant`) → `Classify`; **Groq Synth Model** (`llama-3.3-70b-versatile`) → `Synthesize`.
+
+Cleanup branch (parallel, off `Get Log`): `Find Old Log Rows → IF Has Old Rows → Delete Old Log Rows` prunes `Log` rows older than 7 days each run.
 
 ---
 
@@ -101,7 +103,8 @@ Groq Chat Model connects via `ai_languageModel` to **both** `Classify` and `Synt
 - **Recency via the query** (`when:2d`) plus a 48h safety filter in `Parse Articles` — makes it a true daily letter and shrinks volume before the LLM.
 - **Company re-attachment after HTTP** is index-based in `Parse Articles` (10 responses in order). `continueOnFail` on Fetch News preserves alignment.
 - **`chainLlm` kills `$json` downstream.** `Parse Classification` reads article fields via `$('Filter & Dedup').item.json`, not `$json`.
-- **Groq rate safety** = `retryOnFail` + 5s backoff on both LLM nodes (the real throttle); `Wait 3s` adds spacing.
+- **Groq rate-limit handling.** `Classify` uses the lighter `llama-3.1-8b-instant` (much higher free-tier limits); only `Synthesize` uses `llama-3.3-70b-versatile`. Both LLM nodes `retryOnFail` 5× with 45s backoff (long enough to outlast Groq's per-minute window). Token volume is capped: description→Classify at 800 chars, combined→Synthesize at 6000 chars. (`Wait 3s` is incidental — the n8n Wait node fires once per batch, not per call, so the smaller model + backoff are the real fixes.)
+- **Log retention: 7 days.** A cleanup branch off `Get Log` counts the leading rows whose `Logged` is older than 7 days and deletes that contiguous top block in one delete call. Rows are appended chronologically, so old rows are always the top block — no scattered/bottom-up delete needed. Safe for dedup: the fetch window is only `when:2d` (≪ 7 days), so a pruned row can never reappear. NOTE: n8n's delete-rows operation name/index fields vary by version — verify the `Delete Old Log Rows` node on import (operation = Delete Rows or Columns, dimension = Rows, start index, number to delete).
 - **Sanitize preserves paragraphs.** Single newlines → spaces, double newlines → paragraph breaks; also emits an `html` field (`<br><br>`) for the Gmail body. Uses `String.fromCharCode` instead of escaped regex to avoid JSON double-escaping.
 - **Recipient is never hardcoded.** Both Gmail nodes read `={{ $('Config').first().json.recipientEmail }}`; the placeholder lives only in the `Config` node.
 - **`Get Log` has `alwaysOutputData: true`.** On the first run the `Log` tab has only headers (0 data rows); a Sheets read returns 0 items, and n8n skips downstream nodes that get 0 items — so without this, `Get Targets` (and the whole pipeline) never fires on an empty Log. The empty placeholder item is harmless to dedup (no `Signal URL` → filtered out of the Set).
@@ -111,9 +114,9 @@ Groq Chat Model connects via `ai_languageModel` to **both** `Classify` and `Synt
 
 ## Post-Import Checklist
 
-1. Confirm the Google Sheet document + `Targets`/`Log` tabs resolve in all 4 Google Sheets nodes (spreadsheet ID `1An48EJ3ikZOiwB-4wnO-XNqAO7lX_7OIsIOc8swAljY`, Targets gid `0`, Log gid `802787579`).
+1. Sheet ID + tab gids are already wired (`1An48EJ3ikZOiwB-4wnO-XNqAO7lX_7OIsIOc8swAljY`, Targets `0`, Log `802787579`) — just confirm they resolve.
 2. Set `recipientEmail` in the **Config** node.
 3. Map credentials: `Google Sheets OAuth2 API`, `Groq account`, `Gmail OAuth2 API`.
-4. Verify every IF node (`IF Real`, `IF Include`, `IF Has Signals`) — left side is an expression and the operator reads **"is true"** (most import-fragile part).
-5. Confirm `Groq Chat Model` links to both `Classify` and `Synthesize`.
+4. Verify every IF node (`IF Real`, `IF Include`, `IF Has Signals`, `IF Has Old Rows`) — left side is an expression and the operator reads **"is true"** (most import-fragile part).
+5. Confirm `Groq Classify Model` → `Classify` and `Groq Synth Model` → `Synthesize` links rendered, and verify the `Delete Old Log Rows` node (operation = Delete Rows or Columns, dimension = Rows).
 6. First run via Manual Trigger — confirm Google News RSS returns data (open network required; not testable in the GitHub-only cloud sandbox).
