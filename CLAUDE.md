@@ -104,13 +104,14 @@ Groq Chat Model connects via `ai_languageModel` to **both** `Classify` and `Synt
 - **Groq rate safety** = `retryOnFail` + 5s backoff on both LLM nodes (the real throttle); `Wait 3s` adds spacing.
 - **Sanitize preserves paragraphs.** Single newlines → spaces, double newlines → paragraph breaks; also emits an `html` field (`<br><br>`) for the Gmail body. Uses `String.fromCharCode` instead of escaped regex to avoid JSON double-escaping.
 - **Recipient is never hardcoded.** Both Gmail nodes read `={{ $('Config').first().json.recipientEmail }}`; the placeholder lives only in the `Config` node.
+- **`Get Log` has `alwaysOutputData: true`.** On the first run the `Log` tab has only headers (0 data rows); a Sheets read returns 0 items, and n8n skips downstream nodes that get 0 items — so without this, `Get Targets` (and the whole pipeline) never fires on an empty Log. The empty placeholder item is harmless to dedup (no `Signal URL` → filtered out of the Set).
 - **Google Sheets nodes: do NOT set a `resource` field.** It defaults to "Sheet Within Document" on its own; explicitly adding `resource` to the JSON broke the live node (the skill file's "never add resource" rule is correct). Use `operation: "read"` for reads — the "Get Row(s)" op — NOT `getRows`, which is invalid in this n8n version and shows a red warning. Use `operation: "append"` for logs. `documentId` uses `"mode": "id"`, `sheetName` uses `"mode": "list"`.
 
 ---
 
 ## Post-Import Checklist
 
-1. Fill `YOUR_GOOGLE_SHEET_ID` + the `Targets`/`Log` tab GIDs in all 4 Google Sheets nodes.
+1. Confirm the Google Sheet document + `Targets`/`Log` tabs resolve in all 4 Google Sheets nodes (spreadsheet ID `1An48EJ3ikZOiwB-4wnO-XNqAO7lX_7OIsIOc8swAljY`, Targets gid `0`, Log gid `802787579`).
 2. Set `recipientEmail` in the **Config** node.
 3. Map credentials: `Google Sheets OAuth2 API`, `Groq account`, `Gmail OAuth2 API`.
 4. Verify every IF node (`IF Real`, `IF Include`, `IF Has Signals`) — left side is an expression and the operator reads **"is true"** (most import-fragile part).

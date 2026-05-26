@@ -57,6 +57,7 @@
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4,
       "position": [0, 320],
+      "alwaysOutputData": true,
       "parameters": {
         "operation": "read",
         "documentId": {
